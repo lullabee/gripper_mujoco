@@ -96,45 +96,68 @@ class SpiRobGripper:
     
     def generate_xml(self, n_sections):
         """Generate the complete XML model string"""
-        # Add fixed world body and mounting point
         xml = f"""
         <mujoco>
+            <option gravity="0 0 -9.81">
+                <flag contact="enable" constraint="enable"/>
+            </option>
+            
+            <default>
+                <joint armature="0.1" damping="0.1" limited="true"/>
+                <motor ctrllimited="true" ctrlrange="-1 1"/>
+                <geom condim="4" friction="1 0.1 0.1"/>
+                <tendon width="0.001"/>
+            </default>
+
             <worldbody>
-                <!-- Fixed mount -->
-                <body name="mount" pos="0 0 {self.mount_height}" euler="0 0 0">
-                    <joint type="fixed"/>
+                <!-- Fixed mount, rotated 180° around X-axis -->
+                <body name="mount" pos="0 0 {self.mount_height}" euler="180 0 0">
+                    <joint name="mount_joint" type="hinge" axis="0 0 1" range="-0.0001 0.0001" damping="1000" stiffness="1000"/>
                     <geom type="box" size="0.05 0.05 0.01" rgba="0.5 0.5 0.5 1"/>
                     
                     <!-- Gripper base attached to mount -->
                     <body name="gripper_base" pos="0 0 -0.02">
                         <geom type="box" size="0.03 0.03 0.02" rgba="0.7 0.7 0.7 1"/>
-                        {self.generate_finger_xml("finger1", 0.02, 0, 0, n_sections)}
-                        {self.generate_finger_xml("finger2", -0.02, 0, 180, n_sections)}
+                        <!-- Rotated fingers by 90° -->
+                        {self.generate_finger_xml("finger1", 0.02, 0, 90, n_sections)}
+                        {self.generate_finger_xml("finger2", -0.02, 0, 270, n_sections)}
                     </body>
                 </body>
 
-                <!-- Objects to grasp -->
-                <body name="sphere" pos="0 0 0.15">
+                <!-- Objects to grasp at different positions -->
+                <body name="sphere1" pos="0 0 0.15">
                     <joint type="free"/>
                     <geom type="sphere" size="0.02" rgba="1 0 0 1" mass="0.1"/>
                 </body>
                 
-                <body name="cylinder" pos="0.1 0 0.15">
+                <body name="sphere2" pos="0.2 0 0.15">
                     <joint type="free"/>
-                    <geom type="cylinder" size="0.015 0.03" rgba="0 1 0 1" mass="0.1"/>
+                    <geom type="sphere" size="0.02" rgba="0 1 0 1" mass="0.1"/>
                 </body>
                 
-                <body name="box" pos="-0.1 0 0.15">
+                <body name="sphere3" pos="-0.2 0 0.15">
                     <joint type="free"/>
-                    <geom type="box" size="0.02 0.02 0.02" rgba="0 0 1 1" mass="0.1"/>
+                    <geom type="sphere" size="0.02" rgba="0 0 1 1" mass="0.1"/>
                 </body>
 
                 <!-- Ground plane -->
                 <geom type="plane" size="1 1 0.1" rgba="0.9 0.9 0.9 1"/>
             </worldbody>
 
-            <actuator>
+            <tendon>
                 {self.generate_actuator_xml(n_sections)}
+            </tendon>
+
+            <actuator>
+                <!-- Add actuators for each finger -->
+                <motor name="finger1_flexor_motor" tendon="finger1_flexor" gear="1000" 
+                       ctrllimited="true" ctrlrange="0 200" forcerange="0 200"/>
+                <motor name="finger1_extensor_motor" tendon="finger1_extensor" gear="1000" 
+                       ctrllimited="true" ctrlrange="0 200" forcerange="0 200"/>
+                <motor name="finger2_flexor_motor" tendon="finger2_flexor" gear="1000" 
+                       ctrllimited="true" ctrlrange="0 200" forcerange="0 200"/>
+                <motor name="finger2_extensor_motor" tendon="finger2_extensor" gear="1000" 
+                       ctrllimited="true" ctrlrange="0 200" forcerange="0 200"/>
             </actuator>
         </mujoco>
         """
@@ -250,13 +273,14 @@ class SpiRobGripper:
         glfw.set_scroll_callback(window, scroll_callback)
 
         # Modified force parameters
-        force_step = 5.0  # Smaller steps for smoother control
-        max_force = 100.0  # Reduced maximum force
-        flexor_forces = [0.0, 0.0, 0.0]
-        extensor_forces = [0.0, 0.0, 0.0]
+        force_step = 5.0
+        max_force = 100.0
+        flexor_forces = [0.0, 0.0]
+        extensor_forces = [0.0, 0.0]
+        gripper_pos = [0, 0, self.mount_height]  # Current gripper position
 
         def keyboard_callback(window, key, scancode, action, mods):
-            nonlocal flexor_forces, extensor_forces
+            nonlocal flexor_forces, extensor_forces, gripper_pos
             
             if action != glfw.PRESS and action != glfw.REPEAT:
                 return
@@ -280,51 +304,41 @@ class SpiRobGripper:
                 cam.elevation = -20
                 cam.distance = 2.0
                 cam.lookat[:] = [0, 0, 0.5]
-                flexor_forces[:] = [0.0, 0.0, 0.0]
-                extensor_forces[:] = [0.0, 0.0, 0.0]
+                flexor_forces[:] = [0.0, 0.0]
+                extensor_forces[:] = [0.0, 0.0]
             
             # Debug print to verify key presses
             print(f"Key pressed: {key}")
             
-            # Symmetric antagonistic control
+            # Object positioning controls
             if key == glfw.KEY_1:
-                print("Flexing finger 1")
-                flexor_forces[0] = min(flexor_forces[0] + force_step, max_force)
-                extensor_forces[0] = max_force - flexor_forces[0]  # Symmetric opposition
-            elif key == glfw.KEY_Q:
-                print("Extending finger 1")
-                extensor_forces[0] = min(extensor_forces[0] + force_step, max_force)
-                flexor_forces[0] = max_force - extensor_forces[0]  # Symmetric opposition
+                gripper_pos[:] = [0, 0, self.mount_height]  # Above object 1
+                mount_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, 'mount')
+                self.model.body_pos[mount_id] = gripper_pos
             elif key == glfw.KEY_2:
-                print("Flexing finger 2")
-                flexor_forces[1] = min(flexor_forces[1] + force_step, max_force)
-                extensor_forces[1] = max_force - flexor_forces[1]
-            elif key == glfw.KEY_W:
-                print("Extending finger 2")
-                extensor_forces[1] = min(extensor_forces[1] + force_step, max_force)
-                flexor_forces[1] = max_force - extensor_forces[1]
+                gripper_pos[:] = [0.2, 0, self.mount_height]  # Above object 2
+                mount_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, 'mount')
+                self.model.body_pos[mount_id] = gripper_pos
             elif key == glfw.KEY_3:
-                print("Flexing finger 3")
-                flexor_forces[2] = min(flexor_forces[2] + force_step, max_force)
-                extensor_forces[2] = max_force - flexor_forces[2]
-            elif key == glfw.KEY_E:
-                print("Extending finger 3")
-                extensor_forces[2] = min(extensor_forces[2] + force_step, max_force)
-                flexor_forces[2] = max_force - flexor_forces[2]
-            elif key == glfw.KEY_SPACE:
-                print("Flexing all fingers")
-                for i in range(3):
-                    flexor_forces[i] = min(flexor_forces[i] + force_step, max_force)
-                    extensor_forces[i] = max_force - flexor_forces[i]
-            elif key == glfw.KEY_B:
-                print("Extending all fingers")
-                for i in range(3):
-                    extensor_forces[i] = min(extensor_forces[i] + force_step, max_force)
-                    flexor_forces[i] = max_force - extensor_forces[i]
-            elif key == glfw.KEY_BACKSPACE:
-                print("Centering all fingers")
-                for i in range(3):
-                    flexor_forces[i] = max_force/2  # Equal forces for neutral position
+                gripper_pos[:] = [-0.2, 0, self.mount_height]  # Above object 3
+                mount_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, 'mount')
+                self.model.body_pos[mount_id] = gripper_pos
+            
+            # Gripper control
+            elif key == glfw.KEY_O:  # Open gripper
+                print("Opening gripper")
+                for i in range(2):
+                    extensor_forces[i] = max_force
+                    flexor_forces[i] = 0
+            elif key == glfw.KEY_C:  # Close gripper
+                print("Closing gripper")
+                for i in range(2):
+                    flexor_forces[i] = max_force
+                    extensor_forces[i] = 0
+            elif key == glfw.KEY_SPACE:  # Reset gripper forces
+                print("Resetting gripper")
+                for i in range(2):
+                    flexor_forces[i] = max_force/2
                     extensor_forces[i] = max_force/2
 
         # Add keyboard callback
@@ -354,7 +368,7 @@ class SpiRobGripper:
             
             # Update force display to show both cables
             force_text = "Cable Forces:\n"
-            for i in range(3):
+            for i in range(2):
                 force_text += f"Finger {i}: Flex: {flexor_forces[i]:.1f}, Extend: {extensor_forces[i]:.1f}\n"
             
             mujoco.mjr_overlay(
@@ -368,7 +382,7 @@ class SpiRobGripper:
             
             # Display joint angles for each finger
             y_offset = 0
-            for i in range(3):
+            for i in range(2):
                 angles = []
                 for j in range(self.model.nu // 3):
                     # Find joint by name using mujoco.mj_name2id
@@ -421,7 +435,7 @@ class SpiRobGripper:
             time_prev = time.time()
             
             # Apply forces to actuators with direct force control
-            for i in range(3):
+            for i in range(2):  # Changed from 3 to 2
                 flexor_idx = i * 2
                 extensor_idx = i * 2 + 1
                 
@@ -508,6 +522,42 @@ class SpiRobGripper:
                     'geom2': self.model.geom_id2name(contact.geom2)
                 })
         return contacts
+
+    def generate_actuator_xml(self, n_sections):
+        """Generate XML for the tendons"""
+        xml = ""
+        
+        # Add tendons for each finger
+        for i in range(2):  # 2 fingers
+            # Flexor tendon
+            xml += f"""
+                <spatial name="finger{i+1}_flexor" width="0.001" rgba="1 0 0 1">
+                    <site site="finger{i+1}_flexor_base"/>
+            """
+            for j in range(n_sections):
+                xml += f"""
+                    <site site="finger{i+1}_flexor_site_{j}_a"/>
+                    <site site="finger{i+1}_flexor_site_{j}_b"/>
+                """
+            xml += """
+                </spatial>
+            """
+            
+            # Extensor tendon
+            xml += f"""
+                <spatial name="finger{i+1}_extensor" width="0.001" rgba="0 1 0 1">
+                    <site site="finger{i+1}_extensor_base"/>
+            """
+            for j in range(n_sections):
+                xml += f"""
+                    <site site="finger{i+1}_extensor_site_{j}_a"/>
+                    <site site="finger{i+1}_extensor_site_{j}_b"/>
+                """
+            xml += """
+                </spatial>
+            """
+        
+        return xml
 
 if __name__ == "__main__":
     # Create and run the gripper simulation

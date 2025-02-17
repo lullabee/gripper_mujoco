@@ -20,28 +20,38 @@ python spirob_mujoco.py
 ```
 
 ## Controls
-
 ### Camera Controls
 - **Arrow Keys**: 
   - Left/Right: Rotate camera azimuth
   - Up/Down: Adjust camera elevation
-- **Z/X**: Zoom in/out
-- **R**: Reset camera to default view
-- **Mouse Controls**:
-  - Right Button + Drag: Rotate view
-  - Left Button + Drag: Pan camera
-  - Middle Button/Scroll: Zoom in/out
+- **Z**: Zoom in
+- **X**: Zoom out
+- **R**: Reset camera view
 
-### Gripper Controls
-- **Position**:
-  - **1**: Move gripper above center object
-  - **2**: Move gripper above right object
-  - **3**: Move gripper above left object
-- **Grasping**:
-  - **O**: Open gripper (extend fingers)
-  - **C**: Close gripper (flex fingers)
-  - **Space**: Reset gripper to neutral position
+### Gripper Position Controls
+- **1**: Move gripper above center object
+- **2**: Move gripper above right object
+- **3**: Move gripper above left object
 
+### Gripper Action Controls
+- **O**: Open gripper (extend fingers)
+- **C**: Close gripper (flex fingers)
+- **Space**: Reset gripper to neutral position
+- **T**: Toggle object levitation (teleport closest object to gripper)
+
+### Individual Tendon Control
+- **E**: Extend finger 1 (increase extensor force)
+- **D**: Contract finger 1 (increase flexor force)
+- **I**: Extend finger 2 (increase extensor force)
+- **K**: Contract finger 2 (increase flexor force)
+- **W**: Relax finger 1 (zero both tendons)
+- **S**: Relax finger 2 (zero both tendons)
+- **Space**: Relax both fingers (reset to neutral position)
+
+### Mouse Controls
+- **Right Button + Drag**: Rotate view
+- **Left Button + Drag**: Pan camera
+- **Middle Button/Scroll**: Zoom in/out
 ## Display Information
 
 The simulation window shows:

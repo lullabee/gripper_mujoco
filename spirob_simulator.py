@@ -358,5 +358,5 @@ class SpiRob:
 
 # Example usage
 if __name__ == "__main__":
-    robot = SpiRob(scale=1.0, length=5.0, n_sections=15)
+    robot = SpiRob(scale=1.0, length=5.0, n_sections=5)
     robot.interactive_demo() 

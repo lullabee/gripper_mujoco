@@ -7,6 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.widgets import Slider, Button, RadioButtons
 from svg.path import parse_path
 from xml.dom import minidom
+import mujoco
 
 class SpiRob:
     def __init__(self, scale=1.0, length=5.0, cross_section_type='triangle', n_sections=20, svg_path=None):
@@ -356,7 +357,79 @@ class SpiRob:
         
         plt.show()
 
+class SpirobSimulator:
+    def __init__(self, n_sections=10):
+        self.gripper = SpiralGripper(n_sections=n_sections)
+        self.viewer = None
+        self.add_objects_to_scene()
+        
+    def add_objects_to_scene(self):
+        """Add objects to the scene by modifying the XML."""
+        # Parse existing XML
+        xml = self.gripper.xml
+        
+        # Add objects before the ground plane
+        objects_xml = '''
+            <!-- Objects to grasp -->
+            <body name="sphere1" pos="0 0 0.1">
+                <joint type="free"/>
+                <geom type="sphere" size="0.02" rgba="1 0.5 0.5 1" mass="0.1"/>
+            </body>
+            <body name="sphere2" pos="0.1 0 0.1">
+                <joint type="free"/>
+                <geom type="sphere" size="0.015" rgba="0.5 1 0.5 1" mass="0.1"/>
+            </body>
+            <body name="box1" pos="-0.1 0 0.1">
+                <joint type="free"/>
+                <geom type="box" size="0.02 0.02 0.02" rgba="0.5 0.5 1 1" mass="0.1"/>
+            </body>
+        '''
+        
+        # Insert objects before ground plane
+        xml = xml.replace('<geom type="plane"', objects_xml + '\n<geom type="plane"')
+        
+        # Update model with new XML
+        self.gripper.xml = xml
+        self.gripper.model = mujoco.MjModel.from_xml_string(xml)
+        self.gripper.data = mujoco.MjData(self.gripper.model)
+        
+        # Reset gripper after modifying scene
+        self.gripper.reset_gripper()
+
+    def simulate(self, duration=10.0, render=True):
+        """Run simulation for specified duration."""
+        if render and self.viewer is None:
+            self.viewer = mujoco.viewer.launch_passive(self.gripper.model, self.gripper.data)
+
+        # Simulation loop
+        start_time = self.gripper.data.time
+        while self.gripper.data.time - start_time < duration:
+            mujoco.mj_step(self.gripper.model, self.gripper.data)
+            
+            if render:
+                self.viewer.sync()
+                
+            # Add keyboard controls
+            if render and self.viewer.is_running():
+                key_events = self.viewer.input.key_events
+                for key in key_events:
+                    if key.key == '1':  # Close gripper
+                        self.gripper.close_gripper()
+                    elif key.key == '2':  # Open gripper
+                        self.gripper.open_gripper()
+                    elif key.key == '3':  # Reset gripper
+                        self.gripper.reset_gripper()
+                key_events.clear()
+            else:
+                break
+
 # Example usage
 if __name__ == "__main__":
-    robot = SpiRob(scale=1.0, length=5.0, n_sections=5)
-    robot.interactive_demo() 
+    print("Running SpirobSimulator...")
+    print("Controls:")
+    print("1: Close gripper")
+    print("2: Open gripper")
+    print("3: Reset gripper")
+    
+    simulator = SpirobSimulator(n_sections=10)
+    simulator.simulate() 

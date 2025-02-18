@@ -20,6 +20,7 @@ class SpiralGripper:
         self.data = mujoco.MjData(self.model)
         
         self.reset_gripper()
+        self.position = np.array([0., 0., 0.])
 
     def generate_finger_links(self, n_segments, a, b, initial_width, initial_length, taper_factor):
       """ Generate parameters for finger segments based on a logarithmic spiral. """
@@ -84,15 +85,16 @@ class SpiralGripper:
         
         for i, link in enumerate(self.link_data):
             xml += f'''
-            <body name="{name}_section_{i}" pos="0 0 {-0.007 - i*0.007}">
+            <body name="{name}_section_{i}" pos="0 0 {-0.02 - i*0.02}">
                 <joint name="{name}_joint_{i}" type="hinge" axis="1 0 0" range="-90 90" stiffness="0.01" damping="0.1"/>
                 <geom type="mesh" mesh="segment_{i}" 
-                      euler="90 90 90"
-                      rgba="0.4 0.4 0.8 1"/>
-                <!-- Sites aligned with scaled mesh cylinders -->
-                <site name="{name}_elastic_site_{i}" pos="0 0 0" size="0.0004" rgba="0.2 0.2 1 1"/>
-                <site name="{name}_tendon_front_{i}" pos="0.02 0.02 0" size="0.0004" rgba="1 0 0 1"/>
-                <site name="{name}_tendon_back_{i}" pos="0.02 -0.02 0" size="0.0004" rgba="1 0 0 1"/>
+                      euler="90 90 -90"
+                      rgba="0.4 0.4 0.8 0.5"/>  <!-- Semi-transparent blue -->
+                <!-- Sites for elastic and tendons -->
+                <site name="{name}_elastic_site_{i}" pos="0 0 0" size="0.0004" rgba="1 0 0 1"/>  <!-- Red elastic sites -->
+                <!-- Tendons on front/back faces -->
+                <site name="{name}_tendon_front_{i}" pos="0.01 0 0" size="0.0004" rgba="0 1 0 1"/>  <!-- Green tendon sites -->
+                <site name="{name}_tendon_back_{i}" pos="-0.01 0 0" size="0.0004" rgba="0 1 0 1"/>
             </body>
             '''
         xml += '</body>'
@@ -103,7 +105,7 @@ class SpiralGripper:
         xml = ""
         for i in range(self.n_sections - 1):
             xml += f'''
-            <spatial name="{name}_elastic_{i}" width="0.002" rgba="0.2 0.2 1 1" stiffness="0.1" damping="0.01">
+            <spatial name="{name}_elastic_{i}" width="0.003" rgba="1 0 0 0.8">  <!-- Red elastic -->
                 <site site="{name}_elastic_site_{i}"/>
                 <site site="{name}_elastic_site_{i+1}"/>
             </spatial>
@@ -112,18 +114,18 @@ class SpiralGripper:
 
     def generate_tendon_xml(self, name):
         """Create actuation tendons for finger control."""
-        # Front tendon
+        # Front tendon (green)
         xml = f'''
-        <spatial name="{name}_tendon_front" width="0.0002" rgba="1 0 0 1" stiffness="1" damping="0.1">
+        <spatial name="{name}_tendon_front" width="0.006" rgba="0 1 0 1" material="tendon_material">
             <site site="{name}_base"/>
         '''
         for i in range(self.n_sections):
             xml += f'<site site="{name}_tendon_front_{i}"/>'
         xml += '</spatial>'
         
-        # Back tendon
+        # Back tendon (also green)
         xml += f'''
-        <spatial name="{name}_tendon_back" width="0.0002" rgba="1 0 0 1" stiffness="1" damping="0.1">
+        <spatial name="{name}_tendon_back" width="0.006" rgba="0 1 0 1" material="tendon_material">
             <site site="{name}_base"/>
         '''
         for i in range(self.n_sections):
@@ -135,14 +137,22 @@ class SpiralGripper:
         xml = f'''
         <mujoco>
             <option gravity="0 0 -9.81"/>
+            <visual>
+                <global offwidth="1920" offheight="1080"/>
+                <scale contactwidth="0.002"/>
+                <rgba haze="0.15 0.25 0.35 1"/>
+            </visual>
             <asset>
                 {self.generate_mesh_assets()}
+                <material name="tendon_material" emission="0.5" specular="0.5"/>
             </asset>
             <default>
                 <joint damping="0.1"/>
-                <tendon width="0.001" stiffness="1" damping="0.1"/>
+                <site size="0.003" rgba="1 1 1 1"/>
+                <tendon width="0.004" rgba="1 1 1 1" material="tendon_material"/>
             </default>
             <worldbody>
+                <!-- Gripper mount and base -->
                 <body name="gripper_mount" pos="0 0 {self.mount_height}">
                     <joint name="mount_joint" type="hinge" axis="0 0 1" range="-0.0001 0.0001" damping="1000" stiffness="1000"/>
                     <geom type="box" size="0.05 0.05 0.01" rgba="0.5 0.5 0.5 0.3"/>
@@ -154,6 +164,22 @@ class SpiralGripper:
                         {self.generate_finger_xml("finger2", -0.03, 0, -45)}
                     </body>
                 </body>
+
+                <!-- Objects to grasp -->
+                <body name="sphere1" pos="0 0 0.1">
+                    <joint type="free"/>
+                    <geom type="sphere" size="0.02" rgba="1 0.5 0.5 1" mass="0.1"/>
+                </body>
+                <body name="sphere2" pos="0.1 0 0.1">
+                    <joint type="free"/>
+                    <geom type="sphere" size="0.015" rgba="0.5 1 0.5 1" mass="0.1"/>
+                </body>
+                <body name="box1" pos="-0.1 0 0.1">
+                    <joint type="free"/>
+                    <geom type="box" size="0.02 0.02 0.02" rgba="0.5 0.5 1 1" mass="0.1"/>
+                </body>
+
+                <!-- Ground plane -->
                 <geom type="plane" size="1 1 0.1" rgba="0.9 0.9 0.9 1"/>
             </worldbody>
             <tendon>
@@ -192,3 +218,15 @@ class SpiralGripper:
         for i in range(self.n_sections):
             assets += f'<mesh name="segment_{i}" file="meshes/segment_{i}.stl" scale="2 2 2"/>\n'
         return assets
+
+    def set_position(self, pos):
+        """Set the position of the gripper base."""
+        self.position = np.array(pos)
+        # Update the mount position in the data
+        mount_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "gripper_mount")
+        self.data.qpos[mount_id*7:mount_id*7+3] = pos
+
+    def get_position(self):
+        """Get current gripper position."""
+        mount_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "gripper_mount")
+        return self.data.qpos[mount_id*7:mount_id*7+3].copy()

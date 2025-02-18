@@ -16,41 +16,7 @@ def spiral(a, b, theta):
     y2 = np.sin(theta) * rc
     return x1, y1, x2, y2
 
-def create_attachment_point(x, y, z, radius, height):
-    """Create a small cylinder for attachment points."""
-    n_points = 8
-    angles = np.linspace(0, 2*np.pi, n_points)
-    cylinder_verts = []
-    cylinder_faces = []
-    
-    # Add center points for top and bottom caps
-    cylinder_verts.append([x, y, z - height/2])  # Bottom center
-    cylinder_verts.append([x, y, z + height/2])  # Top center
-    
-    # Add circle points
-    for i in range(n_points):
-        px = x + radius * np.cos(angles[i])
-        py = y + radius * np.sin(angles[i])
-        # Bottom vertex
-        cylinder_verts.append([px, py, z - height/2])
-        # Top vertex
-        cylinder_verts.append([px, py, z + height/2])
-    
-    # Create faces for cylinder
-    for i in range(n_points):
-        next_i = (i + 1) % n_points
-        # Bottom triangle (using center point 0)
-        cylinder_faces.append([0, 2+i*2, 2+next_i*2])
-        # Top triangle (using center point 1)
-        cylinder_faces.append([1, 3+next_i*2, 3+i*2])
-        # Side triangles
-        cylinder_faces.append([2+i*2, 3+i*2, 2+next_i*2])
-        cylinder_faces.append([2+next_i*2, 3+i*2, 3+next_i*2])
-    
-    return np.array(cylinder_verts), np.array(cylinder_faces)
-
-def generate_segment_mesh(a, b, theta, scale, thickness, taper_min, taper_rate, 
-                         attachment_radius, attachment_height):
+def generate_segment_mesh(a, b, theta, scale, thickness, taper_min, taper_rate):
     """Generate a mesh for a single trapezoid-shaped finger segment."""
     # Get points for front face
     x1, y1, x2, y2 = spiral(a, b, theta)
@@ -135,8 +101,7 @@ def generate_segment_mesh(a, b, theta, scale, thickness, taper_min, taper_rate,
     return segment
 
 def generate_finger_segments(n_segments, a, b, scale, thickness, taper_min, 
-                           taper_rate, angle_increment, attachment_radius, 
-                           attachment_height):
+                           taper_rate, angle_increment):
     """Generate and save meshes for all finger segments."""
     if not os.path.exists('meshes'):
         os.makedirs('meshes')
@@ -144,9 +109,7 @@ def generate_finger_segments(n_segments, a, b, scale, thickness, taper_min,
     for i in range(n_segments):
         theta = i * angle_increment
         segment = generate_segment_mesh(
-            a, b, theta, scale, thickness, taper_min, taper_rate,
-            attachment_radius, attachment_height
-        )
+            a, b, theta, scale, thickness, taper_min, taper_rate)
         segment.save(f'meshes/segment_{i}.stl')
 
 def preview_segments(a, b, n_segments, angle_increment=np.deg2rad(15)):
@@ -226,7 +189,7 @@ if __name__ == "__main__":
     params = {
         'n_segments': 10,
         'a': 0.01,          # Initial radius
-        'b': 0.12,          # Growth rate
+        'b': 0.32,          # Growth rate
         'scale': 0.5,       # Overall scale factor
         'thickness': 0.01,  # Base thickness
         'taper_min': 0.3,   # Minimum taper (don't go below 30%)
@@ -246,8 +209,6 @@ if __name__ == "__main__":
         thickness=params['thickness'],
         taper_min=params['taper_min'],
         taper_rate=params['taper_rate'],
-        angle_increment=params['angle_increment'],
-        attachment_radius=params['attachment_radius'],
-        attachment_height=params['attachment_height']
+        angle_increment=params['angle_increment']
     )
     preview_stl(0)

@@ -1,19 +1,21 @@
 import mujoco
 import numpy as np
 
-class SpiralGripper:
-    def __init__(self, n_sections=20, spiral_growth=0.4, taper_factor=0.7, mount_height=0.6):
+class SpiralGripper3D:
+    def __init__(self, n_sections=10, spiral_growth=0.4, taper_factor=0.7, mount_height=0.6, mesh_folder="meshes_3d"):
         """
         Initialize a spiral-shaped gripper with elastic joints.
         n_sections: Number of segments per finger.
         spiral_growth: Growth factor of the logarithmic spiral.
         taper_factor: Reduction in width along the spiral.
         mount_height: Mount height of the gripper base.
+        mesh_folder: Folder containing the mesh files.
         """
         self.n_sections = n_sections
         # self.spiral_growth = spiral_growth
         self.taper_factor = taper_factor
         self.mount_height = mount_height
+        self.mesh_folder = mesh_folder
         self.link_data = self.generate_finger_links(self.n_sections, 0.024, 0.048, 0.015, 0.015, 0.7)
         self.xml = self.generate_xml()
         self.model = mujoco.MjModel.from_xml_string(self.xml)
@@ -87,8 +89,13 @@ class SpiralGripper:
             xml += f'''
             <body name="{name}_section_{i}" pos="0 0 {-0.02 - i*0.02}">
                 <joint name="{name}_joint_{i}" type="hinge" axis="1 0 0" range="-90 90" stiffness="0.01" damping="0.1"/>
+                <body name="axis_frame_{i}" pos="0 0 0">
+                    <geom type="capsule" fromto="0 0 0 0.2 0 0" size="0.01" rgba="1 0 0 1"/>
+                    <geom type="capsule" fromto="0 0 0 0 0.2 0" size="0.01" rgba="0 1 0 1"/>
+                    <geom type="capsule" fromto="0 0 0 0 0 0.2" size="0.01" rgba="0 0 1 1"/>
+                </body>
                 <geom type="mesh" mesh="segment_{i}" 
-                      euler="90 90 -90"
+                      euler="0 0 -0"
                       rgba="0.4 0.4 0.8 0.5"/>  <!-- Semi-transparent blue -->
                 <!-- Sites for elastic and tendons -->
                 <site name="{name}_elastic_site_{i}" pos="0 0 0" size="0.0004" rgba="1 0 0 1"/>  <!-- Red elastic sites -->
@@ -158,10 +165,14 @@ class SpiralGripper:
                     <geom type="box" size="0.05 0.05 0.01" rgba="0.5 0.5 0.5 0.3"/>
                     <body name="gripper_base" pos="0 0 -0.02">
                         <geom type="box" size="0.04 0.04 0.02" rgba="0.7 0.7 0.7 0.3"/>
-                        <site name="finger1_base" pos="0.03 0 0" size="0.002" rgba="1 0 0 1"/>
-                        <site name="finger2_base" pos="-0.03 0 0" size="0.002" rgba="1 0 0 1"/>
-                        {self.generate_finger_xml("finger1", 0.03, 0, 45)}
-                        {self.generate_finger_xml("finger2", -0.03, 0, -45)}
+                        <body name="axis_frame" pos="0 0 0">
+                            <geom type="capsule" fromto="0 0 0 0.2 0 0" size="0.01" rgba="1 0 0 1"/>
+                            <geom type="capsule" fromto="0 0 0 0 0.2 0" size="0.01" rgba="0 1 0 1"/>
+                            <geom type="capsule" fromto="0 0 0 0 0 0.2" size="0.01" rgba="0 0 1 1"/>
+                        </body>
+                        <site name="finger1_base" pos="0.0 0 0" size="0.002" rgba="1 0 0 1"/>
+
+                        {self.generate_finger_xml("finger1", 0.00, 0, 0)}
                     </body>
                 </body>
 
@@ -184,15 +195,14 @@ class SpiralGripper:
             </worldbody>
             <tendon>
                 {self.generate_elastic_xml("finger1")}
-                {self.generate_elastic_xml("finger2")}
+                
                 {self.generate_tendon_xml("finger1")}
-                {self.generate_tendon_xml("finger2")}
+                
             </tendon>
             <actuator>
                 <motor tendon="finger1_tendon_front" ctrlrange="-2 2" gear="10"/>
                 <motor tendon="finger1_tendon_back" ctrlrange="-2 2" gear="10"/>
-                <motor tendon="finger2_tendon_front" ctrlrange="-2 2" gear="10"/>
-                <motor tendon="finger2_tendon_back" ctrlrange="-2 2" gear="10"/>
+
             </actuator>
         </mujoco>
         '''
@@ -216,7 +226,7 @@ class SpiralGripper:
         """Generate XML for mesh assets."""
         assets = ""
         for i in range(self.n_sections):
-            assets += f'<mesh name="segment_{i}" file="meshes/segment_{i}.stl" scale="2 2 2"/>\n'
+            assets += f'<mesh name="segment_{i}" file="{self.mesh_folder}/part_{i+1}.stl" scale="2 2 2"/>\n'
         return assets
 
     def set_position(self, pos):

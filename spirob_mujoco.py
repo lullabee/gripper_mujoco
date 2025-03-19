@@ -5,7 +5,8 @@ import glfw
 import time
 import argparse
 import os  # Import os for directory operations
-from spirob_gripper import SpiralGripper
+#from spirob_gripper import SpiralGripper
+from spirob_gripper2 import SpiralGripper2
 from spirob_simulation import GripperSimulation
 
 def count_meshes_in_directory(directory):
@@ -14,7 +15,7 @@ def count_meshes_in_directory(directory):
 
 if __name__ == "__main__":
     # Define the directory containing mesh files
-    mesh_directory = "meshes"  # Update this path to your mesh folder
+    mesh_directory = "meshes2"  # Update this path to your mesh folder
 
     # Count the number of mesh files
     default_n_sections = count_meshes_in_directory(mesh_directory)
@@ -25,7 +26,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Create gripper and simulation with the specified number of sections
-    gripper = SpiralGripper(n_sections=args.n_sections)
+    gripper = SpiralGripper2(n_sections=args.n_sections)
     sim = GripperSimulation(gripper)
     
     # Initialize and run simulation

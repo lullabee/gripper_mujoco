@@ -84,19 +84,43 @@ class SpiralGripper:
         xml = f'<body name="{name}_base" pos="{base_x} {base_y} 0" euler="0 0 {base_angle}">'
         
         for i, link in enumerate(self.link_data):
-            xml += f'''
-            <body name="{name}_section_{i}" pos="0 0 {-0.02 - i*0.02}">
-                <joint name="{name}_joint_{i}" type="hinge" axis="1 0 0" range="-90 90" stiffness="0.01" damping="0.1"/>
-                <geom type="mesh" mesh="segment_{i}" 
-                      euler="90 90 -90"
-                      rgba="0.4 0.4 0.8 0.5"/>  <!-- Semi-transparent blue -->
-                <!-- Sites for elastic and tendons -->
-                <site name="{name}_elastic_site_{i}" pos="0 0 0" size="0.0004" rgba="1 0 0 1"/>  <!-- Red elastic sites -->
-                <!-- Tendons on front/back faces -->
-                <site name="{name}_tendon_front_{i}" pos="0.01 0 0" size="0.0004" rgba="0 1 0 1"/>  <!-- Green tendon sites -->
-                <site name="{name}_tendon_back_{i}" pos="-0.01 0 0" size="0.0004" rgba="0 1 0 1"/>
-            </body>
-            '''
+            if i == 0:
+                # First segment, attach directly to the base
+                xml += f'''
+                <body name="{name}_section_{i}" pos="0 0 0">
+                    <geom type="mesh" mesh="segment_{i}" 
+                          euler="90 90 0"
+                          rgba="0.4 0.4 0.8 0.5"/>  <!-- Semi-transparent blue -->
+                    <!-- Reference frame visualization -->
+                    <site name="{name}_x_axis_{i}" pos="0.01 0 0" size="0.001" rgba="1 0 0 1"/>  <!-- Red for X-axis -->
+                    <site name="{name}_y_axis_{i}" pos="0 0.01 0" size="0.001" rgba="0 1 0 1"/>  <!-- Green for Y-axis -->
+                    <site name="{name}_z_axis_{i}" pos="0 0 0.01" size="0.001" rgba="0 0 1 1"/>  <!-- Blue for Z-axis -->
+                    <!-- Sites for elastic and tendons -->
+                    <site name="{name}_elastic_site_{i}" pos="0 0 0" size="0.0004" rgba="1 0 0 1"/>  <!-- Red elastic sites -->
+                    <!-- Tendons on front and back -->
+                    <site name="{name}_tendon_front_{i}" pos="0 0.035 0" size="0.0004" rgba="0 1 0 1"/>  <!-- Front tendon -->
+                    <site name="{name}_tendon_back_{i}" pos="0 -0.035 0" size="0.0004" rgba="0 0 1 1"/>  <!-- Back tendon -->
+                </body>
+                '''
+            else:
+                # Subsequent segments with joints
+                xml += f'''
+                <body name="{name}_section_{i}" pos="0 0 {-0.01 - i*0.02}">
+                    <joint name="{name}_joint_{i}" type="hinge" axis="1 0 0" range="-90 90" stiffness="0.01" damping="0.1"/>
+                    <geom type="mesh" mesh="segment_{i}" 
+                          euler="90 90 0"
+                          rgba="0.4 0.4 0.8 0.5"/>  <!-- Semi-transparent blue -->
+                    <!-- Reference frame visualization -->
+                    <site name="{name}_x_axis_{i}" pos="0.01 0 0" size="0.001" rgba="1 0 0 1"/>  <!-- Red for X-axis -->
+                    <site name="{name}_y_axis_{i}" pos="0 0.01 0" size="0.001" rgba="0 1 0 1"/>  <!-- Green for Y-axis -->
+                    <site name="{name}_z_axis_{i}" pos="0 0 0.01" size="0.001" rgba="0 0 1 1"/>  <!-- Blue for Z-axis -->
+                    <!-- Sites for elastic and tendons -->
+                    <site name="{name}_elastic_site_{i}" pos="0 0 0" size="0.0004" rgba="1 0 0 1"/>  <!-- Red elastic sites -->
+                    <!-- Tendons on front and back -->
+                    <site name="{name}_tendon_front_{i}" pos="0 0.035 0" size="0.004" rgba="0 1 0 1"/>  <!-- Front tendon -->
+                    <site name="{name}_tendon_back_{i}" pos="0 -0.035 0" size="0.004" rgba="0 0 1 1"/>  <!-- Back tendon -->
+                </body>
+                '''
         xml += '</body>'
         return xml
 
@@ -114,7 +138,7 @@ class SpiralGripper:
 
     def generate_tendon_xml(self, name):
         """Create actuation tendons for finger control."""
-        # Front tendon (green)
+        # Front tendon
         xml = f'''
         <spatial name="{name}_tendon_front" width="0.006" rgba="0 1 0 1" material="tendon_material">
             <site site="{name}_base"/>
@@ -123,7 +147,7 @@ class SpiralGripper:
             xml += f'<site site="{name}_tendon_front_{i}"/>'
         xml += '</spatial>'
         
-        # Back tendon (also green)
+        # Back tendon
         xml += f'''
         <spatial name="{name}_tendon_back" width="0.006" rgba="0 1 0 1" material="tendon_material">
             <site site="{name}_base"/>
